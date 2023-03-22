@@ -1,5 +1,5 @@
-# echis-dhis middles
-echis-dhis middles - express js talking to DHIS
+# echis-dhis middleware
+echis-dhis middleware - express js talking to DHIS
 
 yarn install
 
