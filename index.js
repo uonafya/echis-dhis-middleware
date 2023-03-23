@@ -7,9 +7,7 @@ require("./routes/readCSV");
 
 const fs = require("fs");
 const { parse } = require("csv-parse");
-const datas = [];
 app.use(express.json());
-// const data_r = []
 const PeriodDate_year = new Date().getFullYear();
 const PeriodDate_month = new Date().getMonth() + 1;
 const periodStartMonth = PeriodDate_month + "/" + "1" + "/" + PeriodDate_year;
@@ -26,22 +24,28 @@ let payload = {
   dataValues: [],
 };
 
-const csvOutput = () => {
-  try {
-    fs.createReadStream("public/files/515.csv")
-      .pipe(parse({ delimiter: ",", from_line: 1 }))
-      .on("data", function (row) {
-        // console.log(row);
-        datas.push(row);
-      });
-    //   if (datas.length >= 1) { data_r=datas }{ data_r.push({error: "There is no data"})}
-    return datas;
-  } catch (error) {
-    return { data: `error ${error}` };
-  }
+const csvOutput = (filename) => {
+  return new Promise((resolve, reject) => {
+    const datas = [];
+    try {
+      fs.createReadStream(filename)
+        .pipe(parse({ delimiter: ",", from_line: 1 }))
+        .on("data", function (rows) {
+          datas.push(rows);
+        })
+        .on("end", function () {
+          console.log({datas});
+          resolve(datas);
+        });
+    } catch (error) {
+      console.log({ error });
+      datas.push({ message: error });
+      reject(error);
+    }
+  });
 };
 
-const data = csvOutput();
+
 
 const convertToDhis = (data) => {
   data_le = data.length;
@@ -94,28 +98,61 @@ const convertToDhis = (data) => {
   return payload;
 };
 
-const postData = () => {
+const postResponse = [];
+const dataJson = []
+
+// Call csvOutput to get the data
+csvOutput("public/files/515.csv").then((datas) => {
+  // Pass the data to another function
+  dataJson.push(convertToDhis(datas))
+}).catch((error) => {
+  console.log(error);
+});
+
+const postData = async (data1) => {
   var request = require("request");
   var options = {
     method: "POST",
     url: "https://test.hiskenya.org/api/dataValueSets",
     headers: {
-      Authorization: 'Basic ' + Buffer.from(process.env.DHIS_USERNAME + ':' + process.env.DHIS_PASSWORD).toString('base64'),
+      Authorization:
+        "Basic " +
+        Buffer.from(
+          process.env.DHIS_USERNAME + ":" + process.env.DHIS_PASSWORD
+        ).toString("base64"),
       "Content-Type": "application/json",
       Cookie: "JSESSIONID=B074FFF6B8F3FC221A41125F21701E8D",
     },
-    body: JSON.stringify(convertToDhis(data)),
+    body: JSON.stringify(data1),
   };
   request(options, function (error, response) {
     if (error) throw new Error(error);
-    console.log(response.body);
+    console.log({ message: response.body });
+    postResponse.push({ message: response.body });
   });
+  return { message: postResponse };
 };
 
 app.get("/", (req, res) => {
   // console.log(data.length)
-  postData()
-  res.send(data);
+  const resp = postData(dataJson);
+  console.log({ resp });
+  res.send({ resp });
+});
+
+app.get("/api/get", (req, res) => {
+  // console.log(data.length)
+  //   const resp = postData(dataJson);
+  console.log("resp");
+  res.send({ dataJson });
+});
+
+app.post("/api/post", (req, res) => {
+  console.log(req.body);
+  const dataBody = req.body;
+  const dataresp = postData(dataBody);
+  console.log({ dataBody, dataresp });
+  res.send({ dataresp });
 });
 
 app.use("/get", userRouter);
